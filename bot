@@ -1,0 +1,198 @@
+import shutil
+import subprocess
+import webbrowser as web
+import datetime
+import pyttsx3
+import pywhatkit
+import wikipedia
+import pyjokes
+import requests
+import sys
+import os
+import speech_recognition as sr
+import pyautogui
+import time
+
+# Initialize text-to-speech engine
+engine = pyttsx3.init()
+voices = engine.getProperty('voices')
+engine.setProperty('voice', voices[1].id)  # Change the voice
+
+# Initialize speech recognizer
+listener = sr.Recognizer()
+
+def talk(text):
+    """Speak out the given text."""
+    engine.say(text)
+    engine.runAndWait()
+
+def wish_me():
+    """Welcome the user based on the time of day."""
+    hour = int(datetime.datetime.now().hour)
+    if 0 <= hour < 12:
+        talk("Good Morning Sir!")
+    elif 12 <= hour < 18:
+        talk("Good Afternoon Sir!")
+    else:
+        talk("Good Evening Sir!")
+    talk("I am your Assistant, Alexa.")
+
+def username():
+    """Ask for and greet the user by their name."""
+    talk("What should I call you, Sir?")
+    uname = take_command_with_fallback("your name")
+    talk(f"Welcome Mister {uname}")
+    print(f"#####################\nWelcome Mr. {uname}\n#####################")
+    talk("How can I help you, Sir?")
+
+def take_command():
+    """Listen for a voice command."""
+    try:
+        with sr.Microphone() as source:
+            print('Listening...')
+            listener.adjust_for_ambient_noise(source)  # Adjust for background noise
+            voice = listener.listen(source)
+            command = listener.recognize_google(voice).lower()
+            if 'alexa' in command:
+                return command.replace('alexa', '').strip()
+    except sr.UnknownValueError:
+        talk("Sorry, I didn't catch that.")
+    except sr.RequestError:
+        talk("Sorry, there's a problem with the speech recognition service.")
+    return ""
+
+def take_command_with_fallback(prompt="your command"):
+    """Listen for a command, ask twice if not understood, and fallback to text input."""
+    for attempt in range(2):  # Allow two attempts to recognize the command
+        command = take_command()
+        if command:
+            return command.lower()
+        talk("Could you please repeat that?")
+
+    # Fallback to text input after two failed attempts
+    talk(f"I couldn't understand you after two tries. Please type {prompt} instead.")
+    command = input(f"Please type {prompt}: ")
+    return command.lower()
+
+def is_connected():
+    """Check for internet connectivity."""
+    try:
+        requests.get("https://www.google.com", timeout=5)
+        return True
+    except requests.ConnectionError:
+        return False
+
+def open_notepad_and_type():
+    """Open Notepad and type what the user says."""
+    # Open Notepad
+    subprocess.Popen(["notepad.exe"])
+    time.sleep(2)  # Wait for Notepad to open
+
+    talk("Notepad is open. Start speaking, and I will type for you. Say 'stop typing' to stop.")
+
+    while True:
+        command = take_command()
+        if "stop typing" in command:
+            talk("Okay, I have stopped typing.")
+            break
+        elif command:
+            pyautogui.typewrite(command + '\n')  # Type the recognized text in Notepad
+
+def switch_application():
+    """Switch between open applications using Alt + Tab."""
+    pyautogui.hotkey('alt', 'tab')  # Simulates pressing Alt + Tab to switch apps
+    time.sleep(1)  # Optional: pause to let the switch happen
+
+def close_application(app_name):
+    """Close an application by its process name."""
+    try:
+        # Use the 'taskkill' command to terminate the application
+        subprocess.run(f"taskkill /f /im {app_name}.exe", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        talk(f"{app_name.capitalize()} has been closed.")
+    except Exception as e:
+        talk(f"Unable to close {app_name}. Error: {str(e)}")
+
+def run_alexa():
+    """Main function to process commands."""
+    if not is_connected():
+        talk("It seems you're not connected to the internet. Please check your connection and try again.")
+        return
+
+    command = take_command_with_fallback("your command")
+    if not command:
+        return
+
+    try:
+        if 'open notepad' in command:
+            open_notepad_and_type()
+
+        elif 'close notepad' in command:
+            close_application('notepad')
+
+        elif 'close' in command:
+            # Extract application name from the command
+            app_name = command.replace("close", "").strip()
+            if app_name:
+                close_application(app_name)
+            else:
+                talk("Please specify the application you want to close.")
+
+        elif 'search' in command:
+            search_query = command.replace("search", "").strip()
+            if search_query:
+                talk(f"Searching for {search_query}")
+                url = f"https://www.google.com/search?q={search_query.replace(' ', '+')}"
+                web.open(url)
+            else:
+                talk("I couldn't understand what you want to search. Please try again with a clear query.")
+
+        elif 'play' in command:
+            song = command.replace('play', '').strip()
+            if song:
+                talk(f'Playing {song}')
+                pywhatkit.playonyt(song)
+            else:
+                talk("I couldn't understand the song name. Please try again.")
+
+        elif 'time' in command:
+            time = datetime.datetime.now().strftime('%I:%M %p')
+            talk(f"The current time is {time}")
+
+        elif 'who is' in command:
+            person = command.replace('who is', '').strip()
+            if person:
+                try:
+                    info = wikipedia.summary(person, 1)
+                    talk(info)
+                except wikipedia.exceptions.DisambiguationError:
+                    talk("There are multiple people with that name. Could you be more specific?")
+                except wikipedia.exceptions.PageError:
+                    talk("Sorry, I couldn't find any information on that person.")
+            else:
+                talk("Please specify who you want information about.")
+
+        elif 'switch application' in command:
+            talk("Switching applications.")
+            switch_application()
+
+        elif 'joke' in command:
+            talk(pyjokes.get_joke())
+
+        elif 'stop' in command:
+            talk("Goodbye, Sir.")
+            sys.exit()
+
+        else:
+            talk("Sorry, I didn't understand that command. Please try again.")
+
+    except Exception as e:
+        talk(f"An error occurred: {str(e)}")
+        print(f"Error: {str(e)}")
+
+if __name__ == "__main__":
+    #wish_me()
+    #username()
+    while True:
+        run_alexa()
+
+
